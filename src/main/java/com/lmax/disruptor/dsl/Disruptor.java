@@ -59,10 +59,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public class Disruptor<T>
 {
-    private final RingBuffer<T> ringBuffer;
-    private final Executor executor;
-    private final ConsumerRepository<T> consumerRepository;
-    private final AtomicBoolean started = new AtomicBoolean(false);
+    protected final RingBuffer<T> ringBuffer;
+    protected final Executor executor;
+    protected ConsumerRepository<T> consumerRepository;
+    protected final AtomicBoolean started = new AtomicBoolean(false);
     protected ExceptionHandler<? super T> exceptionHandler = new ExceptionHandlerWrapper<T>();
 
     /**
@@ -142,7 +142,7 @@ public class Disruptor<T>
     /**
      * Private constructor helper
      */
-    private Disruptor(final RingBuffer<T> ringBuffer, final Executor executor)
+    protected Disruptor(final RingBuffer<T> ringBuffer, final Executor executor)
     {
         this.ringBuffer = ringBuffer;
         this.executor = executor;

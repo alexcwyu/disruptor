@@ -30,9 +30,9 @@ import java.util.Arrays;
  */
 public class EventHandlerGroup<T>
 {
-    private final Disruptor<T> disruptor;
-    private final ConsumerRepository<T> consumerRepository;
-    private final Sequence[] sequences;
+    protected final Disruptor<T> disruptor;
+    protected final ConsumerRepository<T> consumerRepository;
+    protected final Sequence[] sequences;
 
     EventHandlerGroup(
         final Disruptor<T> disruptor,

@@ -8,15 +8,13 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import static java.util.Arrays.fill;
 
-//import com.unisoft.algotrader.model.event.Event;
-//import com.unisoft.algotrader.model.event.EventHandler;
-
 /**
  * Created by alex on 4/12/15.
  */
-public class MultiEventProcessor implements EventProcessor, LifecycleAware
+public class MultiEventProcessor implements EventProcessor
 {
-    private final AtomicBoolean isRunning = new AtomicBoolean(false);
+    private final AtomicBoolean running = new AtomicBoolean(false);
+    private ExceptionHandler exceptionHandler = new FatalExceptionHandler();
     private final AtomicBoolean sealed = new AtomicBoolean(false);
     private final MultiBufferWaitStrategy waitStrategy;
     private final List<RingBufferInfo<?>> ringBufferInfos = new ArrayList<RingBufferInfo<?>>();
@@ -77,7 +75,7 @@ public class MultiEventProcessor implements EventProcessor, LifecycleAware
     @Override
     public void run()
     {
-        if (!isRunning.compareAndSet(false, true))
+        if (!running.compareAndSet(false, true))
         {
             throw new RuntimeException("Already running");
         }
@@ -89,7 +87,7 @@ public class MultiEventProcessor implements EventProcessor, LifecycleAware
             barrier.clearAlert();
         }
 
-        onStart();
+        notifyStart();
 
         final int barrierLength = barriers.length;
         final long[] lastConsumed = new long[barrierLength];
@@ -99,6 +97,9 @@ public class MultiEventProcessor implements EventProcessor, LifecycleAware
         {
             while (true)
             {
+                int currentIdx = -1;
+                long currentSeq = -1;
+                Object event = null;
                 try
                 {
                     long batchCount = 0;
@@ -106,8 +107,10 @@ public class MultiEventProcessor implements EventProcessor, LifecycleAware
                     //RB event
                     for (int i = 0; i < barrierLength; i++)
                     {
+                        currentIdx = i;
                         Sequence sequence = sequences[i];
                         long previous = sequence.get();
+                        currentSeq = previous;
                         expNextSeq[i] = previous + 1L;
                         long available = barriers[i].waitFor(expNextSeq[i]);
 
@@ -115,13 +118,17 @@ public class MultiEventProcessor implements EventProcessor, LifecycleAware
                         {
                             for (long l = previous + 1; l <= available; l++)
                             {
-                                eventHandlers[i].onEvent(providers[i].get(l), l, l==available);
+                                event = providers[i].get(l);
+                                eventHandlers[i].onEvent(event, l, l==available);
                             }
                             sequence.set(available);
                             batchCount += (available - previous);
                         }
                     }
                     count += batchCount;
+                    currentIdx = -1;
+                    currentSeq = -1;
+                    event = null;
 
                     if (batchCount == 0)
                         if (waitStrategy == null)
@@ -137,24 +144,21 @@ public class MultiEventProcessor implements EventProcessor, LifecycleAware
                         break;
                     }
                 }
-                catch (InterruptedException e)
-                {
-                    e.printStackTrace();
-                }
                 catch (TimeoutException e)
                 {
-                    e.printStackTrace();
+                    notifyTimeout(currentIdx, currentSeq);
                 }
-                catch (Exception e)
+                catch (Throwable ex)
                 {
-                    e.printStackTrace();
+                    exceptionHandler.handleEventException(ex, currentSeq+1, event);
                     break;
                 }
             }
         }
         finally
         {
-            onShutdown();
+            notifyShutdown();
+            running.set(false);
         }
     }
 
@@ -194,8 +198,7 @@ public class MultiEventProcessor implements EventProcessor, LifecycleAware
     @Override
     public void halt()
     {
-        isRunning.set(false);
-        //barriers[0].alert();
+        running.set(false);
         for (SequenceBarrier barrier : barriers)
         {
             barrier.alert();
@@ -205,17 +208,89 @@ public class MultiEventProcessor implements EventProcessor, LifecycleAware
     @Override
     public boolean isRunning()
     {
-        return isRunning.get();
+        return running.get();
     }
 
-    @Override
-    public void onStart()
+    public void setExceptionHandler(final ExceptionHandler exceptionHandler)
     {
+        if (null == exceptionHandler)
+        {
+            throw new NullPointerException();
+        }
+
+        this.exceptionHandler = exceptionHandler;
     }
 
-    @Override
-    public void onShutdown()
+    private void notifyTimeout(final int currentIdx, final long availableSequence)
     {
+        try
+        {
+            if (currentIdx != -1 && eventHandlers[currentIdx] instanceof TimeoutHandler)
+            {
+                ((TimeoutHandler)eventHandlers[currentIdx]).onTimeout(availableSequence);
+            }
+            else
+            {
+
+                final int barrierLength = barriers.length;
+                for (int i = 0; i < barrierLength; i++)
+                {
+                    if (eventHandlers[i] instanceof TimeoutHandler)
+                    {
+                        ((TimeoutHandler)eventHandlers[i]).onTimeout(sequences[i].get());
+                    }
+                }
+            }
+        }
+        catch (Throwable e)
+        {
+            exceptionHandler.handleEventException(e, availableSequence, null);
+        }
     }
+
+
+    /**
+     * Notifies the EventHandler when this processor is starting up
+     */
+    private void notifyStart()
+    {
+        for (EventHandler eventHandler : eventHandlers)
+        {
+            if (eventHandler instanceof LifecycleAware)
+            {
+                try
+                {
+                    ((LifecycleAware) eventHandler).onStart();
+                }
+                catch (final Throwable ex)
+                {
+                    exceptionHandler.handleOnStartException(ex);
+                }
+            }
+        }
+    }
+
+    /**
+     * Notifies the EventHandler immediately prior to this processor shutting down
+     */
+    private void notifyShutdown()
+    {
+        for (EventHandler eventHandler : eventHandlers)
+        {
+            if (eventHandler instanceof LifecycleAware)
+            {
+                try
+                {
+                    ((LifecycleAware) eventHandler).onShutdown();
+                }
+                catch (final Throwable ex)
+                {
+                    exceptionHandler.handleOnShutdownException(ex);
+                }
+            }
+        }
+    }
+
+
 }
 
