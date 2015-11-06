@@ -61,9 +61,9 @@ public class Disruptor<T>
 {
     private final RingBuffer<T> ringBuffer;
     private final Executor executor;
-    private final ConsumerRepository<T> consumerRepository = new ConsumerRepository<T>();
+    private final ConsumerRepository<T> consumerRepository;
     private final AtomicBoolean started = new AtomicBoolean(false);
-    private ExceptionHandler<? super T> exceptionHandler = new ExceptionHandlerWrapper<T>();
+    protected ExceptionHandler<? super T> exceptionHandler = new ExceptionHandlerWrapper<T>();
 
     /**
      * Create a new Disruptor. Will default to {@link com.lmax.disruptor.BlockingWaitStrategy} and
@@ -146,6 +146,7 @@ public class Disruptor<T>
     {
         this.ringBuffer = ringBuffer;
         this.executor = executor;
+        this.consumerRepository = new ConsumerRepository<T>();
     }
 
     /**
@@ -541,7 +542,7 @@ public class Disruptor<T>
         return new EventHandlerGroup<T>(this, consumerRepository, workerPool.getWorkerSequences());
     }
 
-    private void checkNotStarted()
+    protected void checkNotStarted()
     {
         if (started.get())
         {
@@ -549,7 +550,7 @@ public class Disruptor<T>
         }
     }
 
-    private void checkOnlyStartedOnce()
+    protected void checkOnlyStartedOnce()
     {
         if (!started.compareAndSet(false, true))
         {
