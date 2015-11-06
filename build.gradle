@@ -16,6 +16,7 @@
 apply plugin: 'java'
 apply plugin: 'osgi'
 apply plugin: 'maven'
+apply plugin: 'maven-publish'
 apply plugin: 'signing'
 apply plugin: 'eclipse'   // Only used so the Eclipse STS Gradle plugin can see the 'perf' source set dependencies. :-(
 apply plugin: 'checkstyle'
@@ -24,7 +25,7 @@ apply plugin: 'idea'
 defaultTasks 'build'
 
 group = 'com.lmax'
-version = new Version(major: 3, minor: 3, revision: 3)
+version = new Version(major: 3, minor: 3, revision: 3, stage: 'multievent')
 
 ext {
     fullName = 'Disruptor Framework'
@@ -180,6 +181,14 @@ task perfJar(type: Jar) {
 
 task wrapper(type: Wrapper) {
     gradleVersion = '2.8'
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java
+        }
+    }
 }
 
 class Version {
