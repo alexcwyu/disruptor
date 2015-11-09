@@ -205,7 +205,7 @@ public class Disruptor<T>
         {
             consumerRepository.add(processor);
         }
-        return new EventHandlerGroup<T>(this, consumerRepository, Util.getSequencesFor(processors));
+        return createEventHandlerGroup(consumerRepository, Util.getSequencesFor(processors));
     }
 
 
@@ -285,7 +285,7 @@ public class Disruptor<T>
             sequences[i] = consumerRepository.getSequenceFor(handlers[i]);
         }
 
-        return new EventHandlerGroup<T>(this, consumerRepository, sequences);
+        return createEventHandlerGroup(consumerRepository, sequences);
     }
 
     /**
@@ -303,7 +303,7 @@ public class Disruptor<T>
             consumerRepository.add(processor);
         }
 
-        return new EventHandlerGroup<T>(this, consumerRepository, Util.getSequencesFor(processors));
+        return createEventHandlerGroup(consumerRepository, Util.getSequencesFor(processors));
     }
 
     /**
@@ -519,7 +519,7 @@ public class Disruptor<T>
             consumerRepository.unMarkEventProcessorsAsEndOfChain(barrierSequences);
         }
 
-        return new EventHandlerGroup<T>(this, consumerRepository, processorSequences);
+        return createEventHandlerGroup(consumerRepository, processorSequences);
     }
 
     EventHandlerGroup<T> createEventProcessors(
@@ -539,7 +539,7 @@ public class Disruptor<T>
         final SequenceBarrier sequenceBarrier = ringBuffer.newBarrier(barrierSequences);
         final WorkerPool<T> workerPool = new WorkerPool<T>(ringBuffer, sequenceBarrier, exceptionHandler, workHandlers);
         consumerRepository.add(workerPool, sequenceBarrier);
-        return new EventHandlerGroup<T>(this, consumerRepository, workerPool.getWorkerSequences());
+        return createEventHandlerGroup(consumerRepository, workerPool.getWorkerSequences());
     }
 
     protected void checkNotStarted()
@@ -556,5 +556,10 @@ public class Disruptor<T>
         {
             throw new IllegalStateException("Disruptor.start() must only be called once.");
         }
+    }
+
+    protected EventHandlerGroup createEventHandlerGroup(final ConsumerRepository<T> consumerRepository,
+                                                           final Sequence[] sequences){
+        return new EventHandlerGroup<T>(this, consumerRepository, sequences);
     }
 }

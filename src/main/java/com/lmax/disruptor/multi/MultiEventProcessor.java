@@ -35,6 +35,11 @@ public class MultiEventProcessor implements EventProcessor
         this.waitStrategy = waitStrategy;
     }
 
+    public Sequence add(RingBuffer provider, EventHandler eventHandler)
+    {
+        return add(provider, provider.newBarrier(new Sequence[0]), eventHandler);
+    }
+
     public Sequence add(RingBuffer provider, SequenceBarrier barriers, EventHandler eventHandler)
     {
         Sequence sequence = new Sequence(Sequencer.INITIAL_CURSOR_VALUE);
@@ -67,7 +72,7 @@ public class MultiEventProcessor implements EventProcessor
                 this.sequences[i]= ringBufferInfo.sequence;
                 this.eventHandlers[i]= ringBufferInfo.eventHandler;
 
-                providers[i].addGatingSequences(sequences[i]);
+                //providers[i].addGatingSequences(sequences[i]);
             }
         }
     }

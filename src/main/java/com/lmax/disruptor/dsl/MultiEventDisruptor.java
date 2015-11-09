@@ -16,20 +16,19 @@ public class MultiEventDisruptor<T> extends Disruptor<T>
                                final int ringBufferSize,
                                final Executor executor)
     {
-        this(RingBuffer.createMultiProducer(eventFactory, ringBufferSize, new NoWaitStrategy()), executor);
+        this(RingBuffer.createMultiProducer(eventFactory, ringBufferSize), executor);
     }
 
     public MultiEventDisruptor(final EventFactory<T> eventFactory,
                                final int ringBufferSize,
                                final Executor executor,
-                               final ProducerType producerType,
-                               final WaitStrategy waitStrategy)
+                               final ProducerType producerType)
     {
-        this(RingBuffer.create(producerType, eventFactory, ringBufferSize, waitStrategy),
+        this(RingBuffer.create(producerType, eventFactory, ringBufferSize, new NoWaitStrategy()),
                 executor);
     }
 
-    protected MultiEventDisruptor(final RingBuffer<T> ringBuffer, final Executor executor)
+    public MultiEventDisruptor(final RingBuffer<T> ringBuffer, final Executor executor)
     {
         super(ringBuffer, executor);
         this.consumerRepository = new MultiEventConsumerRepository<T>(this);
@@ -51,7 +50,7 @@ public class MultiEventDisruptor<T> extends Disruptor<T>
             sequences[i] = consumerRepository.getSequenceFor(infos[i].handler);
         }
 
-        return new MultiEventHandlerGroup<T>(this, consumerRepository, sequences);
+        return createEventHandlerGroup(consumerRepository, sequences);
     }
 
     MultiEventHandlerGroup<T> updateEventProcessors(
@@ -80,7 +79,42 @@ public class MultiEventDisruptor<T> extends Disruptor<T>
             consumerRepository.unMarkEventProcessorsAsEndOfChain(barrierSequences);
         }
 
-        return new MultiEventHandlerGroup<T>(this, consumerRepository, processorSequences);
+        return createEventHandlerGroup(consumerRepository, processorSequences);
+    }
+
+    protected MultiEventHandlerGroup<T> createEventHandlerGroup(final ConsumerRepository<T> consumerRepository,
+                                                           final Sequence[] sequences){
+        return new MultiEventHandlerGroup<T>(this, consumerRepository, sequences);
+    }
+
+    public MultiEventHandlerGroup<T> handleEventsWith(final EventHandler<? super T>... handlers)
+    {
+        return (MultiEventHandlerGroup)super.handleEventsWith(handlers);
+    }
+
+    public MultiEventHandlerGroup<T> handleEventsWith(final EventProcessorFactory<T>... eventProcessorFactories)
+    {
+        return (MultiEventHandlerGroup)super.handleEventsWith(eventProcessorFactories);
+    }
+
+    public MultiEventHandlerGroup<T> handleEventsWith(final EventProcessor... processors)
+    {
+        return (MultiEventHandlerGroup)super.handleEventsWith(processors);
+    }
+
+    public MultiEventHandlerGroup<T> handleEventsWithWorkerPool(final WorkHandler<T>... workHandlers)
+    {
+        return (MultiEventHandlerGroup)super.handleEventsWithWorkerPool(workHandlers);
+    }
+
+    public MultiEventHandlerGroup<T> after(final EventHandler<T>... handlers)
+    {
+        return (MultiEventHandlerGroup)super.after(handlers);
+    }
+
+    public MultiEventHandlerGroup<T> after(final EventProcessor... processors)
+    {
+        return (MultiEventHandlerGroup)super.after(processors);
     }
 
 }
