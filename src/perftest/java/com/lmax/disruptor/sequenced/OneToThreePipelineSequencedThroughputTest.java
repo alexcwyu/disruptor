@@ -22,11 +22,8 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-import com.lmax.disruptor.AbstractPerfTestDisruptor;
-import com.lmax.disruptor.BatchEventProcessor;
-import com.lmax.disruptor.RingBuffer;
-import com.lmax.disruptor.SequenceBarrier;
-import com.lmax.disruptor.YieldingWaitStrategy;
+import com.lmax.disruptor.*;
+import com.lmax.disruptor.support.FizzBuzzEvent;
 import com.lmax.disruptor.support.FunctionEvent;
 import com.lmax.disruptor.support.FunctionEventHandler;
 import com.lmax.disruptor.support.FunctionStep;
@@ -68,11 +65,11 @@ import com.lmax.disruptor.util.DaemonThreadFactory;
  *
  * </pre>
  */
-public final class OneToThreePipelineSequencedThroughputTest extends AbstractPerfTestDisruptor
+public class OneToThreePipelineSequencedThroughputTest extends AbstractPerfTestDisruptor
 {
-    private static final int NUM_EVENT_PROCESSORS = 3;
-    private static final int BUFFER_SIZE = 1024 * 8;
-    private static final long ITERATIONS = 1000L * 1000L * 100L;
+    protected static final int NUM_EVENT_PROCESSORS = 3;
+    protected static final int BUFFER_SIZE = 1024 * 8;
+    protected static final long ITERATIONS = 1000L * 1000L * 100L;
     private final ExecutorService executor = Executors.newFixedThreadPool(NUM_EVENT_PROCESSORS, DaemonThreadFactory.INSTANCE);
 
     private static final long OPERAND_TWO_INITIAL_VALUE = 777L;
@@ -98,29 +95,57 @@ public final class OneToThreePipelineSequencedThroughputTest extends AbstractPer
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
 
-    private final RingBuffer<FunctionEvent> ringBuffer =
-        createSingleProducer(FunctionEvent.EVENT_FACTORY, BUFFER_SIZE, new YieldingWaitStrategy());
-
-    private final SequenceBarrier stepOneSequenceBarrier = ringBuffer.newBarrier();
-    private final FunctionEventHandler stepOneFunctionHandler = new FunctionEventHandler(FunctionStep.ONE);
-    private final BatchEventProcessor<FunctionEvent> stepOneBatchProcessor =
-        new BatchEventProcessor<FunctionEvent>(ringBuffer, stepOneSequenceBarrier, stepOneFunctionHandler);
-
-    private final SequenceBarrier stepTwoSequenceBarrier = ringBuffer.newBarrier(stepOneBatchProcessor.getSequence());
-    private final FunctionEventHandler stepTwoFunctionHandler = new FunctionEventHandler(FunctionStep.TWO);
-    private final BatchEventProcessor<FunctionEvent> stepTwoBatchProcessor =
-        new BatchEventProcessor<FunctionEvent>(ringBuffer, stepTwoSequenceBarrier, stepTwoFunctionHandler);
-
-    private final SequenceBarrier stepThreeSequenceBarrier = ringBuffer.newBarrier(stepTwoBatchProcessor.getSequence());
-    private final FunctionEventHandler stepThreeFunctionHandler = new FunctionEventHandler(FunctionStep.THREE);
-    private final BatchEventProcessor<FunctionEvent> stepThreeBatchProcessor =
-        new BatchEventProcessor<FunctionEvent>(ringBuffer, stepThreeSequenceBarrier, stepThreeFunctionHandler);
-
-    {
-        ringBuffer.addGatingSequences(stepThreeBatchProcessor.getSequence());
-    }
+    protected final FunctionEventHandler stepOneFunctionHandler = new FunctionEventHandler(FunctionStep.ONE);
+    protected final FunctionEventHandler stepTwoFunctionHandler = new FunctionEventHandler(FunctionStep.TWO);
+    protected final FunctionEventHandler stepThreeFunctionHandler = new FunctionEventHandler(FunctionStep.THREE);
+//
+//    private final RingBuffer<FunctionEvent> ringBuffer =
+//        createSingleProducer(FunctionEvent.EVENT_FACTORY, BUFFER_SIZE, new YieldingWaitStrategy());
+//
+//    private final SequenceBarrier stepOneSequenceBarrier = ringBuffer.newBarrier();
+//    private final BatchEventProcessor<FunctionEvent> stepOneBatchProcessor =
+//        new BatchEventProcessor<FunctionEvent>(ringBuffer, stepOneSequenceBarrier, stepOneFunctionHandler);
+//
+//    private final SequenceBarrier stepTwoSequenceBarrier = ringBuffer.newBarrier(stepOneBatchProcessor.getSequence());
+//    private final BatchEventProcessor<FunctionEvent> stepTwoBatchProcessor =
+//        new BatchEventProcessor<FunctionEvent>(ringBuffer, stepTwoSequenceBarrier, stepTwoFunctionHandler);
+//
+//    private final SequenceBarrier stepThreeSequenceBarrier = ringBuffer.newBarrier(stepTwoBatchProcessor.getSequence());
+//    private final BatchEventProcessor<FunctionEvent> stepThreeBatchProcessor =
+//        new BatchEventProcessor<FunctionEvent>(ringBuffer, stepThreeSequenceBarrier, stepThreeFunctionHandler);
+//
+//    {
+//        ringBuffer.addGatingSequences(stepThreeBatchProcessor.getSequence());
+//    }
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+    protected RingBuffer<FunctionEvent> createRingBuffer(){
+        return createSingleProducer(FunctionEvent.EVENT_FACTORY, BUFFER_SIZE, new YieldingWaitStrategy());
+    }
+
+    protected EventProcessor[] createEventProcessor(RingBuffer<FunctionEvent> ringBuffer){
+
+        SequenceBarrier stepOneSequenceBarrier = ringBuffer.newBarrier();
+        BatchEventProcessor<FunctionEvent> stepOneBatchProcessor =
+                new BatchEventProcessor<FunctionEvent>(ringBuffer, stepOneSequenceBarrier, stepOneFunctionHandler);
+
+        SequenceBarrier stepTwoSequenceBarrier = ringBuffer.newBarrier(stepOneBatchProcessor.getSequence());
+        BatchEventProcessor<FunctionEvent> stepTwoBatchProcessor =
+                new BatchEventProcessor<FunctionEvent>(ringBuffer, stepTwoSequenceBarrier, stepTwoFunctionHandler);
+
+        SequenceBarrier stepThreeSequenceBarrier = ringBuffer.newBarrier(stepTwoBatchProcessor.getSequence());
+        BatchEventProcessor<FunctionEvent> stepThreeBatchProcessor =
+                new BatchEventProcessor<FunctionEvent>(ringBuffer, stepThreeSequenceBarrier, stepThreeFunctionHandler);
+            ringBuffer.addGatingSequences(stepThreeBatchProcessor.getSequence());
+
+
+        EventProcessor[] result = {stepOneBatchProcessor, stepTwoBatchProcessor, stepThreeBatchProcessor};
+        return result;
+    }
+
 
     @Override
     protected int getRequiredProcessorCount()
@@ -131,6 +156,13 @@ public final class OneToThreePipelineSequencedThroughputTest extends AbstractPer
     @Override
     protected long runDisruptorPass() throws InterruptedException
     {
+
+        RingBuffer<FunctionEvent> ringBuffer = createRingBuffer();
+        EventProcessor[] batchEventProcessors = createEventProcessor(ringBuffer);
+        EventProcessor stepOneBatchProcessor = batchEventProcessors[0];
+        EventProcessor stepTwoBatchProcessor = batchEventProcessors[1];
+        EventProcessor stepThreeBatchProcessor = batchEventProcessors[2];
+
         CountDownLatch latch = new CountDownLatch(1);
         stepThreeFunctionHandler.reset(latch, stepThreeBatchProcessor.getSequence().get() + ITERATIONS);
 

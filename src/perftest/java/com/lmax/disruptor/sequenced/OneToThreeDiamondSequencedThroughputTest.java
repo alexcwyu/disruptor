@@ -21,15 +21,15 @@ import static com.lmax.disruptor.support.PerfTestUtil.failIfNot;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
-import com.lmax.disruptor.AbstractPerfTestDisruptor;
-import com.lmax.disruptor.BatchEventProcessor;
-import com.lmax.disruptor.RingBuffer;
-import com.lmax.disruptor.SequenceBarrier;
-import com.lmax.disruptor.YieldingWaitStrategy;
+import com.lmax.disruptor.*;
+import com.lmax.disruptor.multi.MultiEventProcessor;
+import com.lmax.disruptor.multi.YieldMultiBufferWaitStrategy;
 import com.lmax.disruptor.support.FizzBuzzEvent;
 import com.lmax.disruptor.support.FizzBuzzEventHandler;
 import com.lmax.disruptor.support.FizzBuzzStep;
+import com.lmax.disruptor.support.ValueEvent;
 import com.lmax.disruptor.util.DaemonThreadFactory;
 
 /**
@@ -77,11 +77,11 @@ import com.lmax.disruptor.util.DaemonThreadFactory;
  *
  * </pre>
  */
-public final class OneToThreeDiamondSequencedThroughputTest extends AbstractPerfTestDisruptor
+public class OneToThreeDiamondSequencedThroughputTest extends AbstractPerfTestDisruptor
 {
-    private static final int NUM_EVENT_PROCESSORS = 3;
-    private static final int BUFFER_SIZE = 1024 * 8;
-    private static final long ITERATIONS = 1000L * 1000L * 100L;
+    protected static final int NUM_EVENT_PROCESSORS = 3;
+    protected static final int BUFFER_SIZE = 8;
+    protected static final long ITERATIONS =  100L;
     private final ExecutorService executor = Executors.newFixedThreadPool(NUM_EVENT_PROCESSORS, DaemonThreadFactory.INSTANCE);
 
     private final long expectedResult;
@@ -105,28 +105,57 @@ public final class OneToThreeDiamondSequencedThroughputTest extends AbstractPerf
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
 
-    private final RingBuffer<FizzBuzzEvent> ringBuffer =
-        createSingleProducer(FizzBuzzEvent.EVENT_FACTORY, BUFFER_SIZE, new YieldingWaitStrategy());
+    protected final FizzBuzzEventHandler fizzHandler = new FizzBuzzEventHandler(FizzBuzzStep.FIZZ);
+    protected final FizzBuzzEventHandler buzzHandler = new FizzBuzzEventHandler(FizzBuzzStep.BUZZ);
+    protected final FizzBuzzEventHandler fizzBuzzHandler = new FizzBuzzEventHandler(FizzBuzzStep.FIZZ_BUZZ);
+//
+//    private final RingBuffer<FizzBuzzEvent> ringBuffer =
+//        createSingleProducer(FizzBuzzEvent.EVENT_FACTORY, BUFFER_SIZE, new YieldingWaitStrategy());
+//
+//    private final SequenceBarrier sequenceBarrier = ringBuffer.newBarrier();
+//
+//    private final BatchEventProcessor<FizzBuzzEvent> batchProcessorFizz =
+//        new BatchEventProcessor<FizzBuzzEvent>(ringBuffer, sequenceBarrier, fizzHandler);
+//
+//    private final BatchEventProcessor<FizzBuzzEvent> batchProcessorBuzz =
+//        new BatchEventProcessor<FizzBuzzEvent>(ringBuffer, sequenceBarrier, buzzHandler);
+//
+//    private final SequenceBarrier sequenceBarrierFizzBuzz =
+//        ringBuffer.newBarrier(batchProcessorFizz.getSequence(), batchProcessorBuzz.getSequence());
+//
+//    private final BatchEventProcessor<FizzBuzzEvent> batchProcessorFizzBuzz =
+//        new BatchEventProcessor<FizzBuzzEvent>(ringBuffer, sequenceBarrierFizzBuzz, fizzBuzzHandler);
+//
+//    {
+//        ringBuffer.addGatingSequences(batchProcessorFizzBuzz.getSequence());
+//    }
 
-    private final SequenceBarrier sequenceBarrier = ringBuffer.newBarrier();
 
-    private final FizzBuzzEventHandler fizzHandler = new FizzBuzzEventHandler(FizzBuzzStep.FIZZ);
-    private final BatchEventProcessor<FizzBuzzEvent> batchProcessorFizz =
-        new BatchEventProcessor<FizzBuzzEvent>(ringBuffer, sequenceBarrier, fizzHandler);
+    protected RingBuffer<FizzBuzzEvent> createRingBuffer(){
+        return createSingleProducer(FizzBuzzEvent.EVENT_FACTORY, BUFFER_SIZE, new YieldingWaitStrategy());
+    }
 
-    private final FizzBuzzEventHandler buzzHandler = new FizzBuzzEventHandler(FizzBuzzStep.BUZZ);
-    private final BatchEventProcessor<FizzBuzzEvent> batchProcessorBuzz =
-        new BatchEventProcessor<FizzBuzzEvent>(ringBuffer, sequenceBarrier, buzzHandler);
 
-    private final SequenceBarrier sequenceBarrierFizzBuzz =
-        ringBuffer.newBarrier(batchProcessorFizz.getSequence(), batchProcessorBuzz.getSequence());
 
-    private final FizzBuzzEventHandler fizzBuzzHandler = new FizzBuzzEventHandler(FizzBuzzStep.FIZZ_BUZZ);
-    private final BatchEventProcessor<FizzBuzzEvent> batchProcessorFizzBuzz =
-        new BatchEventProcessor<FizzBuzzEvent>(ringBuffer, sequenceBarrierFizzBuzz, fizzBuzzHandler);
+    protected EventProcessor[] createEventProcessor(RingBuffer<FizzBuzzEvent> ringBuffer){
+        SequenceBarrier sequenceBarrier = ringBuffer.newBarrier();
 
-    {
+        BatchEventProcessor<FizzBuzzEvent> batchProcessorFizz =
+                new BatchEventProcessor<FizzBuzzEvent>(ringBuffer, sequenceBarrier, fizzHandler);
+
+        BatchEventProcessor<FizzBuzzEvent> batchProcessorBuzz =
+                new BatchEventProcessor<FizzBuzzEvent>(ringBuffer, sequenceBarrier, buzzHandler);
+
+        SequenceBarrier sequenceBarrierFizzBuzz =
+                ringBuffer.newBarrier(batchProcessorFizz.getSequence(), batchProcessorBuzz.getSequence());
+
+        BatchEventProcessor<FizzBuzzEvent> batchProcessorFizzBuzz =
+                new BatchEventProcessor<FizzBuzzEvent>(ringBuffer, sequenceBarrierFizzBuzz, fizzBuzzHandler);
+
         ringBuffer.addGatingSequences(batchProcessorFizzBuzz.getSequence());
+
+        EventProcessor[] result = {batchProcessorFizz, batchProcessorBuzz, batchProcessorFizzBuzz};
+        return result;
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
@@ -140,7 +169,18 @@ public final class OneToThreeDiamondSequencedThroughputTest extends AbstractPerf
     @Override
     protected long runDisruptorPass() throws Exception
     {
+
+
+        RingBuffer<FizzBuzzEvent> ringBuffer = createRingBuffer();
+        EventProcessor[] batchEventProcessors = createEventProcessor(ringBuffer);
+        EventProcessor batchProcessorFizz = batchEventProcessors[0];
+        EventProcessor batchProcessorBuzz = batchEventProcessors[1];
+        EventProcessor batchProcessorFizzBuzz = batchEventProcessors[2];
+
+
         CountDownLatch latch = new CountDownLatch(1);
+        System.out.println(batchProcessorFizzBuzz.getSequence().get());
+        System.out.println(batchProcessorFizzBuzz.getSequence().get() + ITERATIONS);
         fizzBuzzHandler.reset(latch, batchProcessorFizzBuzz.getSequence().get() + ITERATIONS);
 
         executor.submit(batchProcessorFizz);
@@ -151,12 +191,17 @@ public final class OneToThreeDiamondSequencedThroughputTest extends AbstractPerf
 
         for (long i = 0; i < ITERATIONS; i++)
         {
+
             long sequence = ringBuffer.next();
+            System.out.print(sequence);
             ringBuffer.get(sequence).setValue(i);
             ringBuffer.publish(sequence);
         }
 
-        latch.await();
+        System.out.println("done");
+        latch.await(20, TimeUnit.SECONDS);
+        System.out.println(batchProcessorFizzBuzz.getSequence().get());
+        System.out.println(fizzBuzzHandler.getFizzBuzzCounter());
         long opsPerSecond = (ITERATIONS * 1000L) / (System.currentTimeMillis() - start);
 
         batchProcessorFizz.halt();

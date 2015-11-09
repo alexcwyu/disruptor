@@ -21,14 +21,10 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-import com.lmax.disruptor.AbstractPerfTestDisruptor;
-import com.lmax.disruptor.BatchEventProcessor;
-import com.lmax.disruptor.EventFactory;
-import com.lmax.disruptor.RingBuffer;
-import com.lmax.disruptor.SequenceBarrier;
-import com.lmax.disruptor.YieldingWaitStrategy;
+import com.lmax.disruptor.*;
 import com.lmax.disruptor.support.LongArrayEventHandler;
 import com.lmax.disruptor.support.PerfTestUtil;
+import com.lmax.disruptor.support.ValueEvent;
 import com.lmax.disruptor.util.DaemonThreadFactory;
 
 /**
@@ -60,14 +56,14 @@ import com.lmax.disruptor.util.DaemonThreadFactory;
  *
  * </pre>
  */
-public final class OneToOneSequencedLongArrayThroughputTest extends AbstractPerfTestDisruptor
+public class OneToOneSequencedLongArrayThroughputTest extends AbstractPerfTestDisruptor
 {
-    private static final int BUFFER_SIZE = 1024 * 1;
-    private static final long ITERATIONS = 1000L * 1000L * 1L;
-    private static final int ARRAY_SIZE = 2 * 1024;
-    private final ExecutorService executor = Executors.newSingleThreadExecutor(DaemonThreadFactory.INSTANCE);
+    protected static final int BUFFER_SIZE = 1024 * 1;
+    protected static final long ITERATIONS = 1000L * 1000L * 1L;
+    protected static final int ARRAY_SIZE = 2 * 1024;
+    protected final ExecutorService executor = Executors.newSingleThreadExecutor(DaemonThreadFactory.INSTANCE);
 
-    private static final EventFactory<long[]> FACTORY = new EventFactory<long[]>()
+    protected static final EventFactory<long[]> FACTORY = new EventFactory<long[]>()
     {
         @Override
         public long[] newInstance()
@@ -77,15 +73,27 @@ public final class OneToOneSequencedLongArrayThroughputTest extends AbstractPerf
     };
     ///////////////////////////////////////////////////////////////////////////////////////////////
 
-    private final RingBuffer<long[]> ringBuffer =
-        createSingleProducer(FACTORY, BUFFER_SIZE, new YieldingWaitStrategy());
-    private final SequenceBarrier sequenceBarrier = ringBuffer.newBarrier();
-    private final LongArrayEventHandler handler = new LongArrayEventHandler();
-    private final BatchEventProcessor<long[]> batchEventProcessor =
-        new BatchEventProcessor<long[]>(ringBuffer, sequenceBarrier, handler);
+//    private final RingBuffer<long[]> ringBuffer =
+//        createSingleProducer(FACTORY, BUFFER_SIZE, new YieldingWaitStrategy());
+//    private final SequenceBarrier sequenceBarrier = ringBuffer.newBarrier();
+    protected final LongArrayEventHandler handler = new LongArrayEventHandler();
+//    private final BatchEventProcessor<long[]> batchEventProcessor =
+//        new BatchEventProcessor<long[]>(ringBuffer, sequenceBarrier, handler);
+//
+//    {
+//        ringBuffer.addGatingSequences(batchEventProcessor.getSequence());
+//    }
 
-    {
+    protected RingBuffer<long[]> createRingBuffer(){
+        return createSingleProducer(FACTORY, BUFFER_SIZE, new YieldingWaitStrategy());
+    }
+
+    protected EventProcessor createEventProcessor(RingBuffer<long[]> ringBuffer){
+        SequenceBarrier sequenceBarrier = ringBuffer.newBarrier();
+        BatchEventProcessor<long[]> batchEventProcessor =
+                new BatchEventProcessor<long[]>(ringBuffer, sequenceBarrier, handler);
         ringBuffer.addGatingSequences(batchEventProcessor.getSequence());
+        return batchEventProcessor;
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
@@ -99,6 +107,9 @@ public final class OneToOneSequencedLongArrayThroughputTest extends AbstractPerf
     @Override
     protected long runDisruptorPass() throws InterruptedException
     {
+        RingBuffer<long[]> ringBuffer = createRingBuffer();
+        EventProcessor batchEventProcessor = createEventProcessor(ringBuffer);
+
         final CountDownLatch latch = new CountDownLatch(1);
         long expectedCount = batchEventProcessor.getSequence().get() + ITERATIONS;
         handler.reset(latch, ITERATIONS);
@@ -120,7 +131,7 @@ public final class OneToOneSequencedLongArrayThroughputTest extends AbstractPerf
 
         latch.await();
         long opsPerSecond = (ITERATIONS * ARRAY_SIZE * 1000L) / (System.currentTimeMillis() - start);
-        waitForEventProcessorSequence(expectedCount);
+        waitForEventProcessorSequence(batchEventProcessor, expectedCount);
         batchEventProcessor.halt();
 
         PerfTestUtil.failIf(0, handler.getValue());
@@ -128,7 +139,7 @@ public final class OneToOneSequencedLongArrayThroughputTest extends AbstractPerf
         return opsPerSecond;
     }
 
-    private void waitForEventProcessorSequence(long expectedCount) throws InterruptedException
+    private void waitForEventProcessorSequence(EventProcessor batchEventProcessor, long expectedCount) throws InterruptedException
     {
         while (batchEventProcessor.getSequence().get() != expectedCount)
         {

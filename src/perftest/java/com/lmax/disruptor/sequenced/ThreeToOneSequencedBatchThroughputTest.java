@@ -16,6 +16,7 @@
 package com.lmax.disruptor.sequenced;
 
 import static com.lmax.disruptor.RingBuffer.createMultiProducer;
+import static com.lmax.disruptor.RingBuffer.createSingleProducer;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
@@ -23,11 +24,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
-import com.lmax.disruptor.AbstractPerfTestDisruptor;
-import com.lmax.disruptor.BatchEventProcessor;
-import com.lmax.disruptor.BusySpinWaitStrategy;
-import com.lmax.disruptor.RingBuffer;
-import com.lmax.disruptor.SequenceBarrier;
+import com.lmax.disruptor.*;
 import com.lmax.disruptor.support.ValueAdditionEventHandler;
 import com.lmax.disruptor.support.ValueBatchPublisher;
 import com.lmax.disruptor.support.ValueEvent;
@@ -81,35 +78,59 @@ import com.lmax.disruptor.util.DaemonThreadFactory;
 /**
  * @author mikeb01
  */
-public final class ThreeToOneSequencedBatchThroughputTest extends AbstractPerfTestDisruptor
+public class ThreeToOneSequencedBatchThroughputTest extends AbstractPerfTestDisruptor
 {
-    private static final int NUM_PUBLISHERS = 3;
-    private static final int BUFFER_SIZE = 1024 * 64;
-    private static final long ITERATIONS = 1000L * 1000L * 100L;
-    private final ExecutorService executor = Executors.newFixedThreadPool(NUM_PUBLISHERS + 1, DaemonThreadFactory.INSTANCE);
-    private final CyclicBarrier cyclicBarrier = new CyclicBarrier(NUM_PUBLISHERS + 1);
+    protected static final int NUM_PUBLISHERS = 3;
+    protected static final int BUFFER_SIZE = 1024 * 64;
+    protected static final long ITERATIONS = 1000L * 1000L * 100L;
+    protected final ExecutorService executor = Executors.newFixedThreadPool(NUM_PUBLISHERS + 1, DaemonThreadFactory.INSTANCE);
+    protected final CyclicBarrier cyclicBarrier = new CyclicBarrier(NUM_PUBLISHERS + 1);
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
 
-    private final RingBuffer<ValueEvent> ringBuffer =
-        createMultiProducer(ValueEvent.EVENT_FACTORY, BUFFER_SIZE, new BusySpinWaitStrategy());
 
-    private final SequenceBarrier sequenceBarrier = ringBuffer.newBarrier();
-    private final ValueAdditionEventHandler handler = new ValueAdditionEventHandler();
-    private final BatchEventProcessor<ValueEvent> batchEventProcessor =
-        new BatchEventProcessor<ValueEvent>(ringBuffer, sequenceBarrier, handler);
-    private final ValueBatchPublisher[] valuePublishers = new ValueBatchPublisher[NUM_PUBLISHERS];
+    protected final ValueAdditionEventHandler handler = new ValueAdditionEventHandler();
 
-    {
+//    private final RingBuffer<ValueEvent> ringBuffer =
+//        createMultiProducer(ValueEvent.EVENT_FACTORY, BUFFER_SIZE, new BusySpinWaitStrategy());
+//
+//    private final SequenceBarrier sequenceBarrier = ringBuffer.newBarrier();
+//    private final BatchEventProcessor<ValueEvent> batchEventProcessor =
+//        new BatchEventProcessor<ValueEvent>(ringBuffer, sequenceBarrier, handler);
+//    private final ValueBatchPublisher[] valuePublishers = new ValueBatchPublisher[NUM_PUBLISHERS];
+//
+//    {
+//
+//        ringBuffer.addGatingSequences(batchEventProcessor.getSequence());
+//        for (int i = 0; i < NUM_PUBLISHERS; i++)
+//        {
+//            valuePublishers[i] = new ValueBatchPublisher(cyclicBarrier, ringBuffer, ITERATIONS / NUM_PUBLISHERS, 10);
+//        }
+//
+//    }
+
+    ///////////////////////////////////////////////////////////////////////////////////////////////
+
+    protected RingBuffer<ValueEvent> createRingBuffer(){
+        return createMultiProducer(ValueEvent.EVENT_FACTORY, BUFFER_SIZE, new BusySpinWaitStrategy());
+    }
+
+    protected EventProcessor createEventProcessor(RingBuffer<ValueEvent> ringBuffer){
+        SequenceBarrier sequenceBarrier = ringBuffer.newBarrier();
+        BatchEventProcessor<ValueEvent> batchEventProcessor =
+                new BatchEventProcessor<ValueEvent>(ringBuffer, sequenceBarrier, handler);
+        ringBuffer.addGatingSequences(batchEventProcessor.getSequence());
+        return batchEventProcessor;
+    }
+
+    protected ValueBatchPublisher[] createValuePublishers(RingBuffer<ValueEvent> ringBuffer){
+        ValueBatchPublisher[] valuePublishers = new ValueBatchPublisher[NUM_PUBLISHERS];
         for (int i = 0; i < NUM_PUBLISHERS; i++)
         {
             valuePublishers[i] = new ValueBatchPublisher(cyclicBarrier, ringBuffer, ITERATIONS / NUM_PUBLISHERS, 10);
         }
-
-        ringBuffer.addGatingSequences(batchEventProcessor.getSequence());
+        return valuePublishers;
     }
-
-    ///////////////////////////////////////////////////////////////////////////////////////////////
 
     @Override
     protected int getRequiredProcessorCount()
@@ -120,6 +141,10 @@ public final class ThreeToOneSequencedBatchThroughputTest extends AbstractPerfTe
     @Override
     protected long runDisruptorPass() throws Exception
     {
+        RingBuffer<ValueEvent> ringBuffer = createRingBuffer();
+        EventProcessor batchEventProcessor = createEventProcessor(ringBuffer);
+        ValueBatchPublisher[] valuePublishers = createValuePublishers(ringBuffer);
+
         final CountDownLatch latch = new CountDownLatch(1);
         handler
             .reset(latch, batchEventProcessor.getSequence().get() + ((ITERATIONS / NUM_PUBLISHERS) * NUM_PUBLISHERS));

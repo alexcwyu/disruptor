@@ -170,7 +170,14 @@ public class MultiEventProcessor implements EventProcessor
     @Override
     public Sequence getSequence()
     {
-        throw new UnsupportedOperationException();
+        if (sequences != null && sequences.length == 1){
+                return sequences[0];
+        }
+        else if (ringBufferInfos != null &&
+        ringBufferInfos.size() ==1 ){
+            return ringBufferInfos.get(0).sequence;
+        }
+        throw new RuntimeException("Sequence not found");
     }
 
     public Sequence getSequence(RingBuffer buffer)
