@@ -62,14 +62,14 @@ import com.lmax.disruptor.util.MutableLong;
  *
  * </pre>
  */
-public final class OneToOneTranslatorThroughputTest extends AbstractPerfTestDisruptor
+public class OneToOneTranslatorThroughputTest extends AbstractPerfTestDisruptor
 {
-    private static final int BUFFER_SIZE = 1024 * 64;
-    private static final long ITERATIONS = 1000L * 1000L * 100L;
-    private final ExecutorService executor = Executors.newSingleThreadExecutor(DaemonThreadFactory.INSTANCE);
+    protected static final int BUFFER_SIZE = 1024 * 64;
+    protected static final long ITERATIONS = 1000L * 1000L * 100L;
+    protected final ExecutorService executor = Executors.newSingleThreadExecutor(DaemonThreadFactory.INSTANCE);
     private final long expectedResult = PerfTestUtil.accumulatedAddition(ITERATIONS);
-    private final ValueAdditionEventHandler handler = new ValueAdditionEventHandler();
-    private final RingBuffer<ValueEvent> ringBuffer;
+    protected final ValueAdditionEventHandler handler = new ValueAdditionEventHandler();
+    protected RingBuffer<ValueEvent> ringBuffer;
     private final MutableLong value = new MutableLong(0);
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
@@ -77,15 +77,20 @@ public final class OneToOneTranslatorThroughputTest extends AbstractPerfTestDisr
     @SuppressWarnings("unchecked")
     public OneToOneTranslatorThroughputTest()
     {
+        init();
+    }
+
+    protected void init(){
         Disruptor<ValueEvent> disruptor =
-            new Disruptor<ValueEvent>(
-                ValueEvent.EVENT_FACTORY,
-                BUFFER_SIZE, executor,
-                ProducerType.SINGLE,
-                new YieldingWaitStrategy());
+                new Disruptor<ValueEvent>(
+                        ValueEvent.EVENT_FACTORY,
+                        BUFFER_SIZE, executor,
+                        ProducerType.SINGLE,
+                        new YieldingWaitStrategy());
         disruptor.handleEventsWith(handler);
         this.ringBuffer = disruptor.start();
     }
+
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -21,14 +21,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
-import com.lmax.disruptor.AbstractPerfTestDisruptor;
-import com.lmax.disruptor.EventFactory;
-import com.lmax.disruptor.RingBuffer;
-import com.lmax.disruptor.SequenceBarrier;
-import com.lmax.disruptor.YieldingWaitStrategy;
-import com.lmax.disruptor.support.LongArrayEventHandler;
-import com.lmax.disruptor.support.LongArrayPublisher;
-import com.lmax.disruptor.support.MultiBufferBatchEventProcessor;
+import com.lmax.disruptor.*;
+import com.lmax.disruptor.support.*;
 import com.lmax.disruptor.util.DaemonThreadFactory;
 
 /**
@@ -63,27 +57,22 @@ import com.lmax.disruptor.util.DaemonThreadFactory;
  *
  * </pre>
  */
-public final class ThreeToThreeSequencedThroughputTest extends AbstractPerfTestDisruptor
+public class ThreeToThreeSequencedThroughputTest extends AbstractPerfTestDisruptor
 {
-    private static final int NUM_PUBLISHERS = 3;
-    private static final int ARRAY_SIZE = 3;
-    private static final int BUFFER_SIZE = 1024 * 64;
-    private static final long ITERATIONS = 1000L * 1000L * 180L;
+    protected static final int NUM_PUBLISHERS = 3;
+    protected static final int ARRAY_SIZE = 3;
+    protected static final int BUFFER_SIZE = 1024 * 64;
+    protected static final long ITERATIONS = 1000L * 1000L * 180L;
     private final ExecutorService executor =
         Executors.newFixedThreadPool(NUM_PUBLISHERS + 1, DaemonThreadFactory.INSTANCE);
     private final CyclicBarrier cyclicBarrier = new CyclicBarrier(NUM_PUBLISHERS + 1);
 
     ///////////////////////////////////////////////////////////////////////////////////////////////
 
-    @SuppressWarnings("unchecked")
-    private final RingBuffer<long[]>[] buffers = new RingBuffer[NUM_PUBLISHERS];
-    private final SequenceBarrier[] barriers = new SequenceBarrier[NUM_PUBLISHERS];
-    private final LongArrayPublisher[] valuePublishers = new LongArrayPublisher[NUM_PUBLISHERS];
 
-    private final LongArrayEventHandler handler = new LongArrayEventHandler();
-    private final MultiBufferBatchEventProcessor<long[]> batchEventProcessor;
+    protected final LongArrayEventHandler handler = new LongArrayEventHandler();
 
-    private static final EventFactory<long[]> FACTORY = new EventFactory<long[]>()
+    protected static final EventFactory<long[]> FACTORY = new EventFactory<long[]>()
     {
         @Override
         public long[] newInstance()
@@ -92,27 +81,70 @@ public final class ThreeToThreeSequencedThroughputTest extends AbstractPerfTestD
         }
     };
 
-    {
+    protected SequenceBarrier[] barriers = new SequenceBarrier[NUM_PUBLISHERS];
+
+//
+//    @SuppressWarnings("unchecked")
+//    private final RingBuffer<long[]>[] buffers = new RingBuffer[NUM_PUBLISHERS];
+//    private final LongArrayPublisher[] valuePublishers = new LongArrayPublisher[NUM_PUBLISHERS];
+//    private final MultiBufferBatchEventProcessor<long[]> batchEventProcessor;
+//
+//    {
+//        for (int i = 0; i < NUM_PUBLISHERS; i++)
+//        {
+//            buffers[i] = RingBuffer.createSingleProducer(FACTORY, BUFFER_SIZE, new YieldingWaitStrategy());
+//            barriers[i] = buffers[i].newBarrier();
+//            valuePublishers[i] = new LongArrayPublisher(
+//                cyclicBarrier,
+//                buffers[i],
+//                ITERATIONS / NUM_PUBLISHERS,
+//                ARRAY_SIZE);
+//        }
+//
+//        batchEventProcessor = new MultiBufferBatchEventProcessor<long[]>(buffers, barriers, handler);
+//
+//        for (int i = 0; i < NUM_PUBLISHERS; i++)
+//        {
+//            buffers[i].addGatingSequences(batchEventProcessor.getSequences()[i]);
+//        }
+//    }
+
+    ///////////////////////////////////////////////////////////////////////////////////////////////
+
+    protected LongArrayPublisher[] createValuePublishers(RingBuffer<long[]>[] buffers){
+        LongArrayPublisher[] valuePublishers = new LongArrayPublisher[NUM_PUBLISHERS];
+        for (int i = 0; i < NUM_PUBLISHERS; i++)
+        {
+            barriers[i] = buffers[i].newBarrier();
+            valuePublishers[i] = new LongArrayPublisher(
+                    cyclicBarrier,
+                    buffers[i],
+                    ITERATIONS / NUM_PUBLISHERS,
+                    ARRAY_SIZE);
+        }
+        return valuePublishers;
+    }
+
+    protected RingBuffer<long[]>[] createRingBuffer() {
+        RingBuffer<long[]>[] buffers = new RingBuffer[NUM_PUBLISHERS];
         for (int i = 0; i < NUM_PUBLISHERS; i++)
         {
             buffers[i] = RingBuffer.createSingleProducer(FACTORY, BUFFER_SIZE, new YieldingWaitStrategy());
-            barriers[i] = buffers[i].newBarrier();
-            valuePublishers[i] = new LongArrayPublisher(
-                cyclicBarrier,
-                buffers[i],
-                ITERATIONS / NUM_PUBLISHERS,
-                ARRAY_SIZE);
         }
+        return buffers;
+    }
 
-        batchEventProcessor = new MultiBufferBatchEventProcessor<long[]>(buffers, barriers, handler);
+    protected EventProcessor createEventProcessor(RingBuffer<long[]>[] buffers) {
+        MultiBufferBatchEventProcessor<long[]> batchEventProcessor = new MultiBufferBatchEventProcessor<long[]>(buffers, barriers, handler);
 
         for (int i = 0; i < NUM_PUBLISHERS; i++)
         {
             buffers[i].addGatingSequences(batchEventProcessor.getSequences()[i]);
         }
+
+        return batchEventProcessor;
     }
 
-    ///////////////////////////////////////////////////////////////////////////////////////////////
 
     @Override
     protected int getRequiredProcessorCount()
@@ -123,6 +155,10 @@ public final class ThreeToThreeSequencedThroughputTest extends AbstractPerfTestD
     @Override
     protected long runDisruptorPass() throws Exception
     {
+        RingBuffer<long[]>[] ringBuffer = createRingBuffer();
+        EventProcessor batchEventProcessor = createEventProcessor(ringBuffer);
+        LongArrayPublisher[] valuePublishers = createValuePublishers(ringBuffer);
+
         final CountDownLatch latch = new CountDownLatch(1);
         handler.reset(latch, ITERATIONS);
 

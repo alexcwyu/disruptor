@@ -82,7 +82,7 @@ public class ThreeToOneSequencedBatchThroughputTest extends AbstractPerfTestDisr
 {
     protected static final int NUM_PUBLISHERS = 3;
     protected static final int BUFFER_SIZE = 1024 * 64;
-    protected static final long ITERATIONS = 1000L * 1000L * 100L;
+    protected static final long ITERATIONS = 1000L * 1000L * 90L;
     protected final ExecutorService executor = Executors.newFixedThreadPool(NUM_PUBLISHERS + 1, DaemonThreadFactory.INSTANCE);
     protected final CyclicBarrier cyclicBarrier = new CyclicBarrier(NUM_PUBLISHERS + 1);
 

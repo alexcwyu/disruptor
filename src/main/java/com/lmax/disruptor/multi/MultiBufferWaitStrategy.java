@@ -21,7 +21,7 @@ public abstract class MultiBufferWaitStrategy implements WaitStrategy
                 //long available = barriers[i].waitFor(nextSequence);
 
 
-                long available = barriers[i].waitFor(-1);
+                long available = barriers[i].waitFor(sequence);
 
                 if (available >= sequence)
                 {

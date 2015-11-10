@@ -285,6 +285,16 @@ public final class MultiProducerSequencer extends AbstractSequencer
         }
 
         return availableSequence;
+
+//        for (long sequence = availableSequence; sequence >= lowerBound; sequence--)
+//        {
+//            if (isAvailable(sequence))
+//            {
+//                return sequence;
+//            }
+//        }
+//
+//        return lowerBound;
     }
 
     private int calculateAvailabilityFlag(final long sequence)

@@ -7,32 +7,41 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.locks.LockSupport;
 
-import com.lmax.disruptor.AbstractPerfTestDisruptor;
-import com.lmax.disruptor.BatchEventProcessor;
-import com.lmax.disruptor.EventFactory;
-import com.lmax.disruptor.EventHandler;
-import com.lmax.disruptor.RingBuffer;
-import com.lmax.disruptor.WaitStrategy;
-import com.lmax.disruptor.YieldingWaitStrategy;
+import com.lmax.disruptor.*;
 import com.lmax.disruptor.util.DaemonThreadFactory;
 
 public class OneToOneOnHeapThroughputTest extends AbstractPerfTestDisruptor
 {
-    private static final int BLOCK_SIZE = 256;
-    private static final int BUFFER_SIZE = 1024 * 1024;
-    private static final long ITERATIONS = 1000 * 1000 * 10L;
+    protected static final int BLOCK_SIZE = 256;
+    protected static final int BUFFER_SIZE = 1024 * 1024;
+    protected static final long ITERATIONS = 1000 * 1000 * 10L;
+
+
+    protected final ByteBufferHandler handler = new ByteBufferHandler();
 
     private final Executor executor = Executors.newFixedThreadPool(1, DaemonThreadFactory.INSTANCE);
-    private final WaitStrategy waitStrategy = new YieldingWaitStrategy();
-    private final RingBuffer<ByteBuffer> buffer =
-        RingBuffer.createSingleProducer(BufferFactory.direct(BLOCK_SIZE), BUFFER_SIZE, waitStrategy);
-    private final ByteBufferHandler handler = new ByteBufferHandler();
-    private final BatchEventProcessor<ByteBuffer> processor =
-        new BatchEventProcessor<ByteBuffer>(buffer, buffer.newBarrier(), handler);
+//    private final WaitStrategy waitStrategy = new YieldingWaitStrategy();
+//    private final RingBuffer<ByteBuffer> buffer =
+//        RingBuffer.createSingleProducer(BufferFactory.direct(BLOCK_SIZE), BUFFER_SIZE, waitStrategy);
+//    private final BatchEventProcessor<ByteBuffer> processor =
+//        new BatchEventProcessor<ByteBuffer>(buffer, buffer.newBarrier(), handler);
+//
+//    {
+//        buffer.addGatingSequences(processor.getSequence());
+//    }
 
-    {
-        buffer.addGatingSequences(processor.getSequence());
+    protected RingBuffer<ByteBuffer> createRingBuffer(){
+        return RingBuffer.createSingleProducer(BufferFactory.direct(BLOCK_SIZE), BUFFER_SIZE, new YieldingWaitStrategy());
     }
+
+    protected EventProcessor createEventProcessor(RingBuffer<ByteBuffer> buffer) {
+        BatchEventProcessor<ByteBuffer> processor =
+                new BatchEventProcessor<ByteBuffer>(buffer, buffer.newBarrier(), handler);
+        buffer.addGatingSequences(processor.getSequence());
+        return processor;
+    }
+
+
 
     private final Random r = new Random(1);
     private final byte[] data = new byte[BLOCK_SIZE];
@@ -51,9 +60,12 @@ public class OneToOneOnHeapThroughputTest extends AbstractPerfTestDisruptor
     @Override
     protected long runDisruptorPass() throws Exception
     {
+        RingBuffer<ByteBuffer> buffer = createRingBuffer();
+        EventProcessor processor=  createEventProcessor(buffer);
         byte[] data = this.data;
 
         final CountDownLatch latch = new CountDownLatch(1);
+
         long expectedCount = processor.getSequence().get() + ITERATIONS;
         handler.reset(latch, ITERATIONS);
         executor.execute(processor);
@@ -73,13 +85,13 @@ public class OneToOneOnHeapThroughputTest extends AbstractPerfTestDisruptor
 
         latch.await();
         long opsPerSecond = (ITERATIONS * 1000L) / (System.currentTimeMillis() - start);
-        waitForEventProcessorSequence(expectedCount);
+        waitForEventProcessorSequence(processor, expectedCount);
         processor.halt();
 
         return opsPerSecond;
     }
 
-    private void waitForEventProcessorSequence(long expectedCount)
+    private void waitForEventProcessorSequence(EventProcessor processor, long expectedCount)
     {
         while (processor.getSequence().get() < expectedCount)
         {
@@ -124,7 +136,7 @@ public class OneToOneOnHeapThroughputTest extends AbstractPerfTestDisruptor
         }
     }
 
-    private static final class BufferFactory implements EventFactory<ByteBuffer>
+    protected static final class BufferFactory implements EventFactory<ByteBuffer>
     {
         private final boolean isDirect;
         private final int size;

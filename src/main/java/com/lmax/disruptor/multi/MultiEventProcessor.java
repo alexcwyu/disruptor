@@ -21,7 +21,7 @@ public class MultiEventProcessor implements EventProcessor
 
     private String name;
     private long count;
-    private RingBuffer[] providers;
+    private DataProvider[] providers;
     private SequenceBarrier[] barriers;
     private Sequence[] sequences;
     private EventHandler[] eventHandlers;
@@ -49,7 +49,7 @@ public class MultiEventProcessor implements EventProcessor
         return add(provider, provider.newBarrier(new Sequence[0]), eventHandler);
     }
 
-    public Sequence add(RingBuffer provider, SequenceBarrier barriers, EventHandler eventHandler)
+    public Sequence add(DataProvider provider, SequenceBarrier barriers, EventHandler eventHandler)
     {
         Sequence sequence = new Sequence(Sequencer.INITIAL_CURSOR_VALUE);
         this.ringBufferInfos.add(new RingBufferInfo(provider, barriers, sequence, eventHandler));
@@ -68,7 +68,7 @@ public class MultiEventProcessor implements EventProcessor
         {
             int size = ringBufferInfos.size();
 
-            this.providers = new RingBuffer[size];
+            this.providers = new DataProvider[size];
             this.barriers = new SequenceBarrier[size];
             this.sequences = new Sequence[size];
             this.eventHandlers = new EventHandler[size];
@@ -126,8 +126,9 @@ public class MultiEventProcessor implements EventProcessor
                         long previous = sequence.get();
                         currentSeq = previous;
                         expNextSeq[i] = previous + 1L;
+                       // System.out.println(name +", previous="+previous +", next="+expNextSeq[i]);
                         long available = barriers[i].waitFor(expNextSeq[i]);
-
+                       // System.out.println(name +" available="+available);
                         if (available > previous)
                         {
                             for (long l = previous + 1; l <= available; l++)
@@ -137,6 +138,7 @@ public class MultiEventProcessor implements EventProcessor
                             }
                             sequence.set(available);
                             batchCount += (available - previous);
+                           // System.out.println(name +" set="+sequence.get());
                         }
                     }
                     count += batchCount;
@@ -148,7 +150,11 @@ public class MultiEventProcessor implements EventProcessor
                         if (waitStrategy == null)
                             Thread.yield();
                         else
+                        {
+                            //System.out.println(name +" waiting");
                             waitStrategy.waitNext(expNextSeq, barriers);
+                           // System.out.println(name +" waited");
+                        }
 
                 }
                 catch (AlertException e)
