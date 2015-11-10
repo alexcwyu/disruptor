@@ -19,6 +19,7 @@ public class MultiEventProcessor implements EventProcessor
     private final MultiBufferWaitStrategy waitStrategy;
     private final List<RingBufferInfo<?>> ringBufferInfos = new ArrayList<RingBufferInfo<?>>();
 
+    private String name;
     private long count;
     private RingBuffer[] providers;
     private SequenceBarrier[] barriers;
@@ -34,6 +35,14 @@ public class MultiEventProcessor implements EventProcessor
     {
         this.waitStrategy = waitStrategy;
     }
+
+
+    public MultiEventProcessor(String name, MultiBufferWaitStrategy waitStrategy)
+    {
+        this.name = name;
+        this.waitStrategy = waitStrategy;
+    }
+
 
     public Sequence add(RingBuffer provider, EventHandler eventHandler)
     {

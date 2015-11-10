@@ -20,18 +20,18 @@ public class OneToThreeDiamondSequencedMultiEventThroughputTest extends OneToThr
     protected EventProcessor[] createEventProcessor(RingBuffer<FizzBuzzEvent> ringBuffer){
         //SequenceBarrier sequenceBarrier = ringBuffer.newBarrier();
         MultiEventProcessor batchProcessorFizz =
-                new MultiEventProcessor(new YieldMultiBufferWaitStrategy());
+                new MultiEventProcessor("EP1", new YieldMultiBufferWaitStrategy());
         Sequence batchProcessorFizzSequence = batchProcessorFizz.add(ringBuffer, fizzHandler);
 
         MultiEventProcessor batchProcessorBuzz =
-                new MultiEventProcessor(new YieldMultiBufferWaitStrategy());
-        Sequence batchProcessorBuzzSequence = batchProcessorFizz.add(ringBuffer, buzzHandler);
+                new MultiEventProcessor("EP2", new YieldMultiBufferWaitStrategy());
+        Sequence batchProcessorBuzzSequence = batchProcessorBuzz.add(ringBuffer, buzzHandler);
 
         SequenceBarrier sequenceBarrierFizzBuzz =
                 ringBuffer.newBarrier(batchProcessorFizzSequence, batchProcessorBuzzSequence);
 
         MultiEventProcessor batchProcessorFizzBuzz =
-                new MultiEventProcessor(new YieldMultiBufferWaitStrategy());
+                new MultiEventProcessor("EP3", new YieldMultiBufferWaitStrategy());
         ringBuffer.addGatingSequences(batchProcessorFizzBuzz.add(ringBuffer, sequenceBarrierFizzBuzz, fizzBuzzHandler));
 
 

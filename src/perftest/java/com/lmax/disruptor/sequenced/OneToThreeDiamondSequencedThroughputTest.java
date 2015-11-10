@@ -15,22 +15,18 @@
  */
 package com.lmax.disruptor.sequenced;
 
-import static com.lmax.disruptor.RingBuffer.createSingleProducer;
-import static com.lmax.disruptor.support.PerfTestUtil.failIfNot;
+import com.lmax.disruptor.*;
+import com.lmax.disruptor.support.FizzBuzzEvent;
+import com.lmax.disruptor.support.FizzBuzzEventHandler;
+import com.lmax.disruptor.support.FizzBuzzStep;
+import com.lmax.disruptor.util.DaemonThreadFactory;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 
-import com.lmax.disruptor.*;
-import com.lmax.disruptor.multi.MultiEventProcessor;
-import com.lmax.disruptor.multi.YieldMultiBufferWaitStrategy;
-import com.lmax.disruptor.support.FizzBuzzEvent;
-import com.lmax.disruptor.support.FizzBuzzEventHandler;
-import com.lmax.disruptor.support.FizzBuzzStep;
-import com.lmax.disruptor.support.ValueEvent;
-import com.lmax.disruptor.util.DaemonThreadFactory;
+import static com.lmax.disruptor.RingBuffer.createSingleProducer;
+import static com.lmax.disruptor.support.PerfTestUtil.failIfNot;
 
 /**
  * <pre>
@@ -80,8 +76,8 @@ import com.lmax.disruptor.util.DaemonThreadFactory;
 public class OneToThreeDiamondSequencedThroughputTest extends AbstractPerfTestDisruptor
 {
     protected static final int NUM_EVENT_PROCESSORS = 3;
-    protected static final int BUFFER_SIZE = 8;
-    protected static final long ITERATIONS =  100L;
+    protected static final int BUFFER_SIZE = 1024 * 8;
+    protected static final long ITERATIONS =  1000L * 1000L * 100L;
     private final ExecutorService executor = Executors.newFixedThreadPool(NUM_EVENT_PROCESSORS, DaemonThreadFactory.INSTANCE);
 
     private final long expectedResult;
@@ -179,8 +175,6 @@ public class OneToThreeDiamondSequencedThroughputTest extends AbstractPerfTestDi
 
 
         CountDownLatch latch = new CountDownLatch(1);
-        System.out.println(batchProcessorFizzBuzz.getSequence().get());
-        System.out.println(batchProcessorFizzBuzz.getSequence().get() + ITERATIONS);
         fizzBuzzHandler.reset(latch, batchProcessorFizzBuzz.getSequence().get() + ITERATIONS);
 
         executor.submit(batchProcessorFizz);
@@ -191,17 +185,12 @@ public class OneToThreeDiamondSequencedThroughputTest extends AbstractPerfTestDi
 
         for (long i = 0; i < ITERATIONS; i++)
         {
-
             long sequence = ringBuffer.next();
-            System.out.print(sequence);
             ringBuffer.get(sequence).setValue(i);
             ringBuffer.publish(sequence);
         }
 
-        System.out.println("done");
-        latch.await(20, TimeUnit.SECONDS);
-        System.out.println(batchProcessorFizzBuzz.getSequence().get());
-        System.out.println(fizzBuzzHandler.getFizzBuzzCounter());
+        latch.await();
         long opsPerSecond = (ITERATIONS * 1000L) / (System.currentTimeMillis() - start);
 
         batchProcessorFizz.halt();
