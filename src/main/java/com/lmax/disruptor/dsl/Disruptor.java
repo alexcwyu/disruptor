@@ -79,7 +79,8 @@ public class Disruptor<T>
     @Deprecated
     public Disruptor(final EventFactory<T> eventFactory, final int ringBufferSize, final Executor executor)
     {
-        this(RingBuffer.createMultiProducer(eventFactory, ringBufferSize), executor);
+        this(RingBuffer.createMultiProducer(eventFactory, ringBufferSize), executor,
+                new ConsumerRepository<T>());
     }
 
     /**
@@ -102,7 +103,8 @@ public class Disruptor<T>
         final ProducerType producerType,
         final WaitStrategy waitStrategy)
     {
-        this(RingBuffer.create(producerType, eventFactory, ringBufferSize, waitStrategy), executor);
+        this(RingBuffer.create(producerType, eventFactory, ringBufferSize, waitStrategy), executor,
+                new ConsumerRepository<T>());
     }
 
     /**
@@ -115,7 +117,8 @@ public class Disruptor<T>
      */
     public Disruptor(final EventFactory<T> eventFactory, final int ringBufferSize, final ThreadFactory threadFactory)
     {
-        this(RingBuffer.createMultiProducer(eventFactory, ringBufferSize), new BasicExecutor(threadFactory));
+        this(RingBuffer.createMultiProducer(eventFactory, ringBufferSize), new BasicExecutor(threadFactory),
+                new ConsumerRepository<T>());
     }
 
     /**
@@ -136,17 +139,25 @@ public class Disruptor<T>
     {
         this(RingBuffer.create(
                                producerType, eventFactory, ringBufferSize, waitStrategy),
-                new BasicExecutor(threadFactory));
+                new BasicExecutor(threadFactory),
+                new ConsumerRepository<T>());
     }
 
     /**
      * Private constructor helper
      */
+    protected Disruptor(final RingBuffer<T> ringBuffer, final Executor executor, final ConsumerRepository<T> consumerRepository)
+    {
+        this.ringBuffer = ringBuffer;
+        this.executor = executor;
+        this.consumerRepository = consumerRepository;
+    }
+
+
     protected Disruptor(final RingBuffer<T> ringBuffer, final Executor executor)
     {
         this.ringBuffer = ringBuffer;
         this.executor = executor;
-        this.consumerRepository = new ConsumerRepository<T>();
     }
 
     /**

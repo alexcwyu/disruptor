@@ -5,6 +5,7 @@ import com.lmax.disruptor.multi.MultiEventProcessor;
 import com.lmax.disruptor.multi.NoWaitStrategy;
 
 import java.util.concurrent.Executor;
+import java.util.concurrent.ThreadFactory;
 
 /**
  * Created by alex on 6/11/15.
@@ -12,11 +13,9 @@ import java.util.concurrent.Executor;
 public class MultiEventDisruptor<T> extends Disruptor<T>
 {
 
-    public MultiEventDisruptor(final EventFactory<T> eventFactory,
-                               final int ringBufferSize,
-                               final Executor executor)
+    public MultiEventDisruptor(final EventFactory<T> eventFactory, final int ringBufferSize, final Executor executor)
     {
-        this(RingBuffer.createMultiProducer(eventFactory, ringBufferSize), executor);
+        this(RingBuffer.createMultiProducer(eventFactory, ringBufferSize, new NoWaitStrategy()), executor);
     }
 
     public MultiEventDisruptor(final EventFactory<T> eventFactory,
@@ -26,6 +25,22 @@ public class MultiEventDisruptor<T> extends Disruptor<T>
     {
         this(RingBuffer.create(producerType, eventFactory, ringBufferSize, new NoWaitStrategy()),
                 executor);
+    }
+
+    public MultiEventDisruptor(final EventFactory<T> eventFactory, final int ringBufferSize, final ThreadFactory threadFactory)
+    {
+        this(RingBuffer.createMultiProducer(eventFactory, ringBufferSize, new NoWaitStrategy()), new BasicExecutor(threadFactory));
+    }
+
+    public MultiEventDisruptor(
+            final EventFactory<T> eventFactory,
+            final int ringBufferSize,
+            final ThreadFactory threadFactory,
+            final ProducerType producerType)
+    {
+        this(RingBuffer.create(
+                        producerType, eventFactory, ringBufferSize, new NoWaitStrategy()),
+                new BasicExecutor(threadFactory));
     }
 
     public MultiEventDisruptor(final RingBuffer<T> ringBuffer, final Executor executor)

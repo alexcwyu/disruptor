@@ -125,6 +125,7 @@ public class MultiEventProcessor implements EventProcessor
                         Sequence sequence = sequences[i];
                         long previous = sequence.get();
                         currentSeq = previous;
+                        //expNextSeq[i] = previous;
                         expNextSeq[i] = previous + 1L;
                        // System.out.println(name +", previous="+previous +", next="+expNextSeq[i]);
                         long available = barriers[i].waitFor(expNextSeq[i]);
